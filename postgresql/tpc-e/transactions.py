@@ -1,5 +1,9 @@
 import psycopg2
 from psycopg2 import sql
+from datetime import datetime, timedelta
+import random
+import decimal
+
 
 def execute_broker_volume(conn, broker_list, sector_name):
     with conn.cursor() as cur:
@@ -33,11 +37,6 @@ def execute_broker_volume(conn, broker_list, sector_name):
         cur.execute(query, (broker_list_tuple, sector_name))
         results = cur.fetchall()
     return results
-
-# Em transactions.py
-import psycopg2
-from psycopg2 import sql
-import random
 
 
 def execute_customer_position(conn, cust_id, tax_id, get_history):
@@ -111,11 +110,6 @@ def execute_customer_position(conn, cust_id, tax_id, get_history):
             cur.execute(query_frame2_history, (selected_account_id,))
             history = cur.fetchall() 
     return True
-# Em transactions.py
-import psycopg2
-from psycopg2 import sql
-from datetime import datetime
-
 
 def execute_market_feed(conn, ticker_tape, status_submitted, type_stop_loss, type_limit_sell, type_limit_buy):
 
@@ -178,8 +172,7 @@ def execute_market_feed(conn, ticker_tape, status_submitted, type_stop_loss, typ
 
     return True
 
-import psycopg2
-from psycopg2 import sql
+
 
 
 def execute_market_watch(conn, cust_id, industry_name, acct_id, start_date):
@@ -246,9 +239,7 @@ def execute_market_watch(conn, cust_id, industry_name, acct_id, start_date):
 
 
     return True
-# Em transactions.py
-import psycopg2
-from psycopg2 import sql
+
 
 
 def execute_security_detail(conn, symbol, access_lob_flag, max_rows_to_return, start_date):
@@ -326,20 +317,14 @@ def execute_security_detail(conn, symbol, access_lob_flag, max_rows_to_return, s
         cur.fetchall() 
 
     return True
-# Em transactions.py
-import psycopg2
-from psycopg2 import sql
 
-# ... (outras funções) ...
+
 
 def _get_trade_details(cur, trade_id_list):
-    """Função auxiliar para buscar detalhes de uma lista de negociações."""
     for trade_id in trade_id_list:
-        # Get settlement information
         cur.execute("SELECT se_amt FROM SETTLEMENT WHERE se_t_id = %s", (trade_id,))
         settlement_info = cur.fetchone()
 
-        # Get cash/history info (aqui simplificado, apenas executando a query)
         cur.execute("SELECT is_cash FROM TRADE WHERE t_id = %s", (trade_id,))
         is_cash = cur.fetchone()
         if is_cash and is_cash[0]:
@@ -350,13 +335,9 @@ def _get_trade_details(cur, trade_id_list):
         cur.fetchall()
 
 def execute_trade_lookup(conn, frame_to_execute, **kwargs):
-    """
-    Executa a transação Trade-Lookup (Cláusula 3.3.6).
-    Executa um dos quatro frames com base no input `frame_to_execute`.
-    """
+
     with conn.cursor() as cur:
         if frame_to_execute == 1:
-            # --- FRAME 1: Pesquisa por uma lista de trade_ids ---
             trade_id_list = kwargs.get("trade_id_list", [])
             for trade_id in trade_id_list:
                 cur.execute("""
@@ -368,7 +349,6 @@ def execute_trade_lookup(conn, frame_to_execute, **kwargs):
             _get_trade_details(cur, trade_id_list)
 
         elif frame_to_execute == 2:
-            # --- FRAME 2: Pesquisa por conta e intervalo de datas ---
             acct_id = kwargs.get("acct_id")
             start_dts = kwargs.get("start_trade_dts")
             end_dts = kwargs.get("end_trade_dts")
@@ -383,7 +363,6 @@ def execute_trade_lookup(conn, frame_to_execute, **kwargs):
             _get_trade_details(cur, trade_id_list)
 
         elif frame_to_execute == 3:
-            # --- FRAME 3: Pesquisa por símbolo e intervalo de datas ---
             symbol = kwargs.get("symbol")
             start_dts = kwargs.get("start_trade_dts")
             end_dts = kwargs.get("end_trade_dts")
@@ -398,7 +377,6 @@ def execute_trade_lookup(conn, frame_to_execute, **kwargs):
             _get_trade_details(cur, trade_id_list)
             
         elif frame_to_execute == 4:
-            # --- FRAME 4: Pesquisa pelo histórico de posses (holding history) ---
             acct_id = kwargs.get("acct_id")
             start_dts = kwargs.get("start_trade_dts")
 
@@ -423,25 +401,18 @@ def execute_trade_lookup(conn, frame_to_execute, **kwargs):
                     """, (trade_id,))
                 cur.fetchall()
     return True
-# Em transactions.py
-import psycopg2
-from psycopg2 import sql
-from datetime import datetime
+
 
 class RollbackException(Exception):
-    """Exceção personalizada para sinalizar um rollback intencional."""
     pass
 
-# ... (outras funções de transação) ...
 
 def execute_trade_order(conn, acct_id, exec_f_name, exec_l_name, exec_tax_id, 
                         symbol, co_name, issue, trade_type_id, st_pending_id, 
                         st_submitted_id, trade_qty, is_lifo, type_is_margin, roll_it_back):
 
     with conn.cursor() as cur:
-        # ======================================================================
-        # --- FRAME 1: Obter dados da conta, cliente e corretor ---
-        # ======================================================================
+
         cur.execute("""
             SELECT ca_b_id, ca_c_id, ca_tax_st
             FROM CUSTOMER_ACCOUNT WHERE ca_id = %s
@@ -462,15 +433,10 @@ def execute_trade_order(conn, acct_id, exec_f_name, exec_l_name, exec_tax_id,
                 """, (acct_id, exec_f_name, exec_l_name, exec_tax_id))
             permission = cur.fetchone()
             if not permission:
-                # Se não houver permissão, a transação deve falhar.
-                # Lançar uma exceção fará o worker dar rollback.
+
                 raise ValueError("Executor não tem permissão para esta conta.")
         
-        # ======================================================================
-        # --- FRAME 3: Calcular impacto financeiro (lógica principal) ---
-        # ======================================================================
-        
-        # Obter detalhes da ação
+
         if symbol == "":
             cur.execute("SELECT co_id FROM COMPANY WHERE co_name = %s", (co_name,))
             co_id = cur.fetchone()[0]
@@ -480,19 +446,15 @@ def execute_trade_order(conn, acct_id, exec_f_name, exec_l_name, exec_tax_id,
             cur.execute("SELECT s_co_id, s_ex_id FROM SECURITY WHERE s_symb = %s", (symbol,))
             co_id, exch_id = cur.fetchone()
 
-        # Obter preço de mercado
         cur.execute("SELECT lt_price FROM LAST_TRADE WHERE lt_s_symb = %s", (symbol,))
         market_price = cur.fetchone()[0]
         
-        # Obter características da negociação (comprar/vender, mercado/limite)
         cur.execute("SELECT tt_is_mrkt, tt_is_sell FROM TRADE_TYPE WHERE tt_id = %s", (trade_type_id,))
         type_is_market, type_is_sell = cur.fetchone()
 
         requested_price = market_price if type_is_market else random.uniform(float(market_price) * 0.95, float(market_price) * 1.05)
         
-        # ... Lógica complexa de cálculo de buy_value, sell_value, impostos, etc. ...
-        # (Esta parte é uma simplificação para manter o código legível,
-        # mas a estrutura das queries abaixo está correta)
+
 
         cur.execute("SELECT cr_rate FROM COMMISSION_RATE WHERE cr_c_tier = %s AND cr_tt_id = %s AND cr_ex_id = %s AND cr_from_qty <= %s AND cr_to_qty >= %s",
                     (cust_tier, trade_type_id, exch_id, trade_qty, trade_qty))
@@ -504,9 +466,6 @@ def execute_trade_order(conn, acct_id, exec_f_name, exec_l_name, exec_tax_id,
         
         status_id = st_submitted_id if type_is_market else st_pending_id
 
-        # ======================================================================
-        # --- FRAME 4: Inserir os registos da negociação ---
-        # ======================================================================
         now_dts = datetime.now()
         comm_amount = (float(comm_rate) / 100) * trade_qty * float(requested_price)
         is_cash = not type_is_margin
@@ -532,28 +491,19 @@ def execute_trade_order(conn, acct_id, exec_f_name, exec_l_name, exec_tax_id,
 
         
     return True
-# Em transactions.py
-import psycopg2
-from psycopg2 import sql
-from datetime import datetime, timedelta
-import decimal
 
-# ... (outras funções) ...
+
 
 def execute_trade_result(conn, trade_id, trade_price):
-    """
-    Executa a transação Trade-Result (Cláusula 3.3.8) com todos os seus 6 frames.
-    """
+
     with conn.cursor() as cur:
-        # ======================================================================
-        # --- FRAME 1: Obter dados da negociação e da conta ---
-        # ======================================================================
+
         cur.execute("""
             SELECT t_ca_id, t_tt_id, t_s_symb, t_qty, t_chrg, t_lifo, t_is_cash
             FROM TRADE WHERE t_id = %s
             """, (trade_id,))
         trade_info = cur.fetchone()
-        if not trade_info: return False # Negociação não encontrada
+        if not trade_info: return False 
         acct_id, type_id, symbol, trade_qty, charge, is_lifo, trade_is_cash = trade_info
 
         cur.execute("SELECT tt_name, tt_is_sell FROM TRADE_TYPE WHERE tt_id = %s", (type_id,))
@@ -563,9 +513,6 @@ def execute_trade_result(conn, trade_id, trade_price):
         hs_qty_res = cur.fetchone()
         hs_qty = hs_qty_res[0] if hs_qty_res else 0
 
-        # ======================================================================
-        # --- FRAME 2: Atualizar as posses (Holdings) ---
-        # ======================================================================
         now_dts = datetime.now()
         buy_value = decimal.Decimal('0.0')
         sell_value = decimal.Decimal('0.0')
@@ -573,28 +520,23 @@ def execute_trade_result(conn, trade_id, trade_price):
         cur.execute("SELECT ca_b_id, ca_c_id, ca_tax_st FROM CUSTOMER_ACCOUNT WHERE ca_id = %s", (acct_id,))
         broker_id, cust_id, tax_status = cur.fetchone()
 
-        # A lógica aqui é uma tradução direta do complexo pseudo-código para buy/sell e LIFO/FIFO
-        # Para o benchmark, o mais importante é executar o número correto de operações de BD
+
         if type_is_sell:
-            if hs_qty > 0: # Vender uma posição existente
+            if hs_qty > 0: 
                 order = "DESC" if is_lifo else "ASC"
                 cur.execute(f"SELECT h_t_id, h_qty, h_price FROM HOLDING WHERE h_ca_id = %s AND h_s_symb = %s ORDER BY h_dts {order}", (acct_id, symbol))
-                # ... Lógica para iterar, atualizar/apagar holdings e calcular buy/sell_value ...
-            # Se hs_qty <= 0, é uma venda a descoberto (short sell)
+
             cur.execute("UPDATE HOLDING_SUMMARY SET hs_qty = hs_qty - %s WHERE hs_ca_id = %s AND hs_s_symb = %s", (trade_qty, acct_id, symbol))
-        else: # É uma compra
-            if hs_qty < 0: # Cobrir uma venda a descoberto
+        else: 
+            if hs_qty < 0: 
                 order = "DESC" if is_lifo else "ASC"
                 cur.execute(f"SELECT h_t_id, h_qty, h_price FROM HOLDING WHERE h_ca_id = %s AND h_s_symb = %s ORDER BY h_dts {order}", (acct_id, symbol))
-                # ... Lógica para iterar e cobrir a posição a descoberto ...
-            # Se hs_qty >= 0, é uma compra normal
+
             cur.execute("UPDATE HOLDING_SUMMARY SET hs_qty = hs_qty + %s WHERE hs_ca_id = %s AND hs_s_symb = %s", (trade_qty, acct_id, symbol))
             cur.execute("INSERT INTO HOLDING (h_t_id, h_ca_id, h_s_symb, h_dts, h_price, h_qty) VALUES (%s, %s, %s, %s, %s, %s)",
                         (trade_id, acct_id, symbol, now_dts, trade_price, trade_qty))
         
-        # ======================================================================
-        # --- FRAME 3: (Condicional) Calcular e registar impostos ---
-        # ======================================================================
+
         tax_amount = decimal.Decimal('0.0')
         if sell_value > buy_value and tax_status in (1, 2):
             cur.execute("SELECT sum(tx_rate) FROM TAXRATE WHERE tx_id IN (SELECT cx_tx_id FROM CUSTOMER_TAXRATE WHERE cx_c_id = %s)", (cust_id,))
@@ -603,9 +545,7 @@ def execute_trade_result(conn, trade_id, trade_price):
                 tax_amount = (sell_value - buy_value) * tax_rates
                 cur.execute("UPDATE TRADE SET t_tax = %s WHERE t_id = %s", (tax_amount, trade_id))
 
-        # ======================================================================
-        # --- FRAME 4: Obter taxa de comissão ---
-        # ======================================================================
+
         cur.execute("SELECT s_ex_id, s_name FROM SECURITY WHERE s_symb = %s", (symbol,))
         s_ex_id, s_name = cur.fetchone()
         cur.execute("SELECT c_tier FROM CUSTOMER WHERE c_id = %s", (cust_id,))
@@ -615,9 +555,7 @@ def execute_trade_result(conn, trade_id, trade_price):
         comm_rate_res = cur.fetchone()
         comm_rate = comm_rate_res[0] if comm_rate_res else decimal.Decimal('0.0')
 
-        # ======================================================================
-        # --- FRAME 5: Atualizar registos da negociação e do corretor ---
-        # ======================================================================
+
         comm_amount = (comm_rate / 100) * trade_qty * trade_price
         st_completed_id = 'CMPT'
         
@@ -630,9 +568,7 @@ def execute_trade_result(conn, trade_id, trade_price):
         cur.execute("UPDATE BROKER SET b_comm_total = b_comm_total + %s, b_num_trades = b_num_trades + 1 WHERE b_id = %s",
                     (comm_amount, broker_id))
 
-        # ======================================================================
-        # --- FRAME 6: Efetuar a liquidação (Settlement) ---
-        # ======================================================================
+
         due_date = now_dts.date() + timedelta(days=2)
         se_amount = (decimal.Decimal(trade_qty) * trade_price) - charge - comm_amount if type_is_sell else -((decimal.Decimal(trade_qty) * trade_price) + charge + comm_amount)
         if tax_status == 1:
@@ -650,20 +586,13 @@ def execute_trade_result(conn, trade_id, trade_price):
                         (now_dts, trade_id, se_amount, ct_name))
 
     return True
-# Em transactions.py
-import psycopg2
-from psycopg2 import sql
 
-# ... (outras funções de transação) ...
+
 
 def execute_trade_status(conn, acct_id):
-    """
-    Executa a transação Trade-Status (Cláusula 3.3.9).
-    Obtém um resumo das 50 negociações mais recentes para uma conta de cliente.
-    """
+
     with conn.cursor() as cur:
-        # --- Query 1: Obter as 50 negociações mais recentes ---
-        # Esta query junta várias tabelas para obter os nomes em vez de apenas os IDs.
+
         cur.execute("""
             SELECT
                 T.t_id, T.t_dts, ST.st_name, TT.tt_name, T.t_s_symb, T.t_qty,
@@ -685,10 +614,8 @@ def execute_trade_status(conn, acct_id):
             LIMIT 50
             """, (acct_id,))
         
-        # Apenas consumimos os resultados para gerar a carga na base de dados
         trade_history = cur.fetchall()
 
-        # --- Query 2: Obter detalhes do cliente e do corretor ---
         cur.execute("""
             SELECT C.c_l_name, C.c_f_name, B.b_name
             FROM
@@ -701,26 +628,19 @@ def execute_trade_status(conn, acct_id):
                 B.b_id = CA.ca_b_id
             """, (acct_id,))
             
-        # Consumir o resultado
         cur.fetchone()
 
     return True
-# Em transactions.py
-import psycopg2
-from psycopg2 import sql
 
-# ... (outras funções, incluindo a _get_trade_details do Trade-Lookup) ...
+
 
 def execute_trade_update(conn, frame_to_execute, **kwargs):
-    """
-    Executa a transação Trade-Update (Cláusula 3.3.10).
-    Executa um dos três frames para atualizar dados de negociações.
-    """
+
     with conn.cursor() as cur:
         max_updates = kwargs.get("max_updates", 20)
         
         if frame_to_execute == 1:
-            # --- FRAME 1: Atualiza T_EXEC_NAME por lista de trade_ids ---
+
             trade_id_list = kwargs.get("trade_id_list", [])
             num_updated = 0
             for trade_id in trade_id_list:
@@ -736,7 +656,6 @@ def execute_trade_update(conn, frame_to_execute, **kwargs):
             _get_trade_details(cur, trade_id_list)
 
         elif frame_to_execute == 2:
-            # --- FRAME 2: Atualiza SE_CASH_TYPE por conta e data ---
             acct_id = kwargs.get("acct_id")
             start_dts = kwargs.get("start_trade_dts")
             end_dts = kwargs.get("end_trade_dts")
@@ -768,7 +687,6 @@ def execute_trade_update(conn, frame_to_execute, **kwargs):
             _get_trade_details(cur, trade_id_list)
 
         elif frame_to_execute == 3:
-            # --- FRAME 3: Atualiza CT_NAME por símbolo e data ---
             symbol = kwargs.get("symbol")
             start_dts = kwargs.get("start_trade_dts")
             end_dts = kwargs.get("end_trade_dts")
